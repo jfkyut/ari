@@ -57,6 +57,7 @@ Set these values in `.env`:
 | `LLM_URL` | Full chat-completions endpoint URL, such as `https://api.example.com/v1/chat/completions`. |
 | `LLM_API_KEY` | API key for the configured LLM provider. |
 | `LLM_MODEL` | Model name supported by that provider. |
+| `TAVILY_API_KEY` | API key for optional web search and webpage extraction, with citations in Ari's answers. |
 | `DB_CONNECTION` | Application database driver; defaults to `sqlite`. |
 
 Do not commit `.env` or put API keys and database credentials in source

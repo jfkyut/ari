@@ -6,6 +6,7 @@ use App\Http\Services\AttachmentPromptService;
 use App\Http\Services\GeneratedFileService;
 use App\Http\Services\LLMService;
 use App\Http\Services\LLMToolCall;
+use App\Http\Services\TavilySearchService;
 use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Thread;
@@ -39,6 +40,7 @@ class ThreadController extends Controller
         protected LLMService $llmService,
         protected AttachmentPromptService $attachmentPromptService,
         protected GeneratedFileService $generatedFileService,
+        protected TavilySearchService $tavilySearchService,
     ) {}
 
     /**
@@ -292,6 +294,9 @@ class ThreadController extends Controller
 
                     $toolCallCount = 0;
                     $fileGenerated = false;
+                    $webSources = [];
+                    $allowWebSearch = is_string(config('services.tavily.key'))
+                        && config('services.tavily.key') !== '';
 
                     while (true) {
                         $toolCalls = [];
@@ -299,6 +304,7 @@ class ThreadController extends Controller
                         foreach ($this->llmService->stream(
                             $history,
                             allowFileGeneration: ! $fileGenerated,
+                            allowWebSearch: $allowWebSearch,
                         ) as $streamEvent) {
                             if ($streamEvent instanceof LLMToolCall) {
                                 $toolCalls[] = $streamEvent;
@@ -326,7 +332,67 @@ class ThreadController extends Controller
                             'tool_calls' => [$toolCall->requestData()],
                         ];
 
-                        if ($toolCall->name === 'generate_file' && ! $fileGenerated) {
+                        if ($toolCall->name === 'search_web' && $allowWebSearch) {
+                            $query = $toolCall->arguments['query'] ?? null;
+
+                            if (! is_string($query) || trim($query) === '' || mb_strlen($query) > 500) {
+                                throw new RuntimeException('The LLM returned an invalid web search query.');
+                            }
+
+                            $toolResult = $this->tavilySearchService->search(trim($query));
+                            $searchResult = json_decode($toolResult, true, 512, JSON_THROW_ON_ERROR);
+
+                            if (! is_array($searchResult)) {
+                                throw new RuntimeException('The web search returned invalid results.');
+                            }
+
+                            $searchResults = $searchResult['results'] ?? null;
+
+                            if (! is_array($searchResults)) {
+                                throw new RuntimeException('The web search returned invalid source results.');
+                            }
+
+                            foreach ($searchResults as $searchSource) {
+                                if (! is_array($searchSource)
+                                    || ! is_string($searchSource['title'] ?? null)
+                                    || ! is_string($searchSource['url'] ?? null)
+                                    || ! is_string($searchSource['content'] ?? null)) {
+                                    throw new RuntimeException('The web search returned an invalid source.');
+                                }
+
+                                $webSources[$searchSource['url']] = [
+                                    'title' => $searchSource['title'],
+                                    'url' => $searchSource['url'],
+                                    'snippet' => $searchSource['content'],
+                                ];
+                            }
+                        } elseif ($toolCall->name === 'fetch_webpage' && $allowWebSearch) {
+                            $url = $toolCall->arguments['url'] ?? null;
+
+                            if (! is_string($url) || trim($url) === '' || mb_strlen($url) > 2048) {
+                                throw new RuntimeException('The LLM returned an invalid webpage URL.');
+                            }
+
+                            $toolResult = $this->tavilySearchService->extract(trim($url));
+                            $extractedPage = json_decode($toolResult, true, 512, JSON_THROW_ON_ERROR);
+
+                            if (! is_array($extractedPage)) {
+                                throw new RuntimeException('The webpage extraction returned invalid results.');
+                            }
+
+                            $extractedContent = $extractedPage['content'] ?? null;
+
+                            if (! is_string($extractedContent)) {
+                                throw new RuntimeException('The webpage extraction returned invalid source content.');
+                            }
+
+                            $sourceUrl = trim($url);
+                            $webSources[$sourceUrl] ??= [
+                                'title' => $sourceUrl,
+                                'url' => $sourceUrl,
+                                'snippet' => $extractedContent,
+                            ];
+                        } elseif ($toolCall->name === 'generate_file' && ! $fileGenerated) {
                             $generatedAttachment = $this->generatedFileService->generate($assistantMessage, $toolCall);
                             $generatedPaths[] = $generatedAttachment->path;
                             $fileGenerated = true;
@@ -343,6 +409,13 @@ class ThreadController extends Controller
                             'tool_call_id' => $toolCall->id,
                             'content' => $toolResult,
                         ];
+                    }
+
+                    $sourcesContent = $this->webSourcesContent($webSources);
+
+                    if ($sourcesContent !== '') {
+                        $responseContent .= $sourcesContent;
+                        yield ['content' => $sourcesContent];
                     }
 
                     $assistantMessage->update(['content' => $responseContent]);
@@ -552,5 +625,38 @@ class ThreadController extends Controller
             'filename' => $attachment->filename,
             'size' => (int) $attachment->size,
         ];
+    }
+
+    /**
+     * @param  array<string, array{title: string, url: string, snippet: string}>  $sources
+     */
+    private function webSourcesContent(array $sources): string
+    {
+        if ($sources === []) {
+            return '';
+        }
+
+        $sourceLines = [];
+
+        foreach ($sources as $source) {
+            $title = $this->plainSourceText($source['title'], 200);
+            $snippet = $this->plainSourceText($source['snippet'], 400);
+            $url = str_replace(['(', ')'], ['%28', '%29'], $source['url']);
+
+            if ($title === '') {
+                $title = $source['url'];
+            }
+
+            $sourceLines[] = '- ['.$title.']('.$url.')'.($snippet !== '' ? ' - '.$snippet : '');
+        }
+
+        return "\n\n**Sources**\n\n".implode("\n", $sourceLines);
+    }
+
+    private function plainSourceText(string $text, int $limit): string
+    {
+        $text = preg_replace('/[\[\]()*_`~]/u', ' ', Str::squish($text));
+
+        return Str::limit(Str::squish(is_string($text) ? $text : ''), $limit, '...');
     }
 }

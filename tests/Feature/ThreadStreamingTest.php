@@ -20,6 +20,7 @@ test('creating a chat stores its first message and streams the first reply in th
         'services.llm.key' => 'test-key',
         'services.llm.model' => 'test-model',
         'services.llm.assistant_name' => 'Mira',
+        'services.tavily.key' => null,
     ]);
 
     Http::fake(function (ClientRequest $request) {
@@ -104,6 +105,160 @@ test('creating a chat stores its first message and streams the first reply in th
                 'You are Mira, a helpful personal AI assistant. Answer questions across a wide range of topics',
             )
             && array_column(array_column($request->data()['tools'], 'function'), 'name') === ['generate_file'];
+    });
+});
+
+test('the assistant searches Tavily and uses its sourced results when search is enabled', function () {
+    Http::preventStrayRequests();
+
+    config([
+        'services.llm.url' => 'https://llm.test/v1/chat/completions',
+        'services.llm.key' => 'test-key',
+        'services.llm.model' => 'test-model',
+        'services.tavily.key' => 'test-tavily-key',
+    ]);
+
+    $toolCallEvent = [
+        'choices' => [[
+            'delta' => [
+                'tool_calls' => [[
+                    'index' => 0,
+                    'id' => 'call_search',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'search_web',
+                        'arguments' => '{"query":"latest PHP release"}',
+                    ],
+                ]],
+            ],
+        ]],
+    ];
+    $extractCallEvent = [
+        'choices' => [[
+            'delta' => [
+                'tool_calls' => [[
+                    'index' => 0,
+                    'id' => 'call_extract',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'fetch_webpage',
+                        'arguments' => '{"url":"https://www.php.net/releases/"}',
+                    ],
+                ]],
+            ],
+        ]],
+    ];
+
+    Http::fake(function (ClientRequest $request) use ($toolCallEvent, $extractCallEvent) {
+        if ($request->url() === 'https://api.tavily.com/search') {
+            return Http::response([
+                'results' => [[
+                    'title' => 'PHP: Releases',
+                    'url' => 'https://www.php.net/releases/',
+                    'published_date' => '2026-10-01',
+                    'content' => 'PHP 8.5 is the latest stable release.',
+                ]],
+            ]);
+        }
+
+        if ($request->url() === 'https://api.tavily.com/extract') {
+            return Http::response([
+                'results' => [[
+                    'url' => 'https://www.php.net/releases/',
+                    'raw_content' => 'PHP 8.5 is the latest stable release, according to the official PHP releases page.',
+                ]],
+            ]);
+        }
+
+        $messages = $request->data()['messages'];
+        $lastMessage = end($messages);
+
+        if ($lastMessage['role'] === 'tool') {
+            if (str_contains($lastMessage['content'], 'PHP 8.5 is the latest stable release.')) {
+                return Http::response(
+                    'data: '.json_encode($extractCallEvent)."\n\n".
+                    "data: [DONE]\n\n",
+                    200,
+                    ['Content-Type' => 'text/event-stream'],
+                );
+            }
+
+            return Http::response(
+                'data: '.json_encode(['choices' => [['delta' => ['content' => 'PHP 8.5 is the latest stable release.']]]])."\n\n".
+                "data: [DONE]\n\n",
+                200,
+                ['Content-Type' => 'text/event-stream'],
+            );
+        }
+
+        return Http::response(
+            'data: '.json_encode($toolCallEvent)."\n\n".
+            "data: [DONE]\n\n",
+            200,
+            ['Content-Type' => 'text/event-stream'],
+        );
+    });
+
+    $user = User::factory()->create();
+    $thread = $user->threads()->create(['title' => 'PHP Releases']);
+    $thread->messages()->create(['role' => 'user', 'content' => 'What is the latest PHP release?']);
+
+    $response = $this->actingAs($user)->post(route('threads.messages.store', $thread), [
+        'message_id' => $thread->messages()->firstOrFail()->id,
+    ]);
+
+    $response->assertOk();
+    expect($response->streamedContent())
+        ->toContain('PHP 8.5 is the latest stable release')
+        ->toContain('**Sources**')
+        ->toContain('PHP: Releases')
+        ->toContain('https:\\/\\/www.php.net\\/releases\\/')
+        ->toContain("event: done\ndata: {}\n\n")
+        ->not->toContain('event: error');
+    $this->assertDatabaseHas('messages', [
+        'thread_id' => $thread->id,
+        'role' => 'assistant',
+        'content' => "PHP 8.5 is the latest stable release.\n\n**Sources**\n\n- [PHP: Releases](https://www.php.net/releases/) - PHP 8.5 is the latest stable release.",
+    ]);
+
+    Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://api.tavily.com/search'
+        && $request->hasHeader('Authorization', 'Bearer test-tavily-key')
+        && $request->data()['query'] === 'latest PHP release'
+        && $request->data()['search_depth'] === 'basic'
+        && $request->data()['max_results'] === 5);
+    Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://api.tavily.com/extract'
+        && $request->hasHeader('Authorization', 'Bearer test-tavily-key')
+        && $request->data()['urls'] === 'https://www.php.net/releases/'
+        && $request->data()['format'] === 'markdown');
+    Http::assertSent(function (ClientRequest $request): bool {
+        if ($request->url() !== 'https://llm.test/v1/chat/completions'
+            || ! isset($request->data()['tools'])) {
+            return false;
+        }
+
+        $toolNames = array_column(array_column($request->data()['tools'], 'function'), 'name');
+
+        return $toolNames === ['generate_file', 'search_web', 'fetch_webpage']
+            && str_contains($request->data()['messages'][0]['content'], 'Do not say that you cannot browse')
+            && str_contains($request->data()['messages'][0]['content'], 'Use fetch_webpage');
+    });
+    Http::assertSent(function (ClientRequest $request): bool {
+        if ($request->url() !== 'https://llm.test/v1/chat/completions') {
+            return false;
+        }
+
+        $messages = $request->data()['messages'];
+        $toolMessage = end($messages);
+
+        if ($toolMessage['role'] !== 'tool') {
+            return false;
+        }
+
+        $toolResult = json_decode($toolMessage['content'], true, 512, JSON_THROW_ON_ERROR);
+
+        return is_array($toolResult)
+            && ($toolResult['url'] ?? null) === 'https://www.php.net/releases/'
+            && str_contains($toolResult['content'] ?? '', 'official PHP releases page.');
     });
 });
 
