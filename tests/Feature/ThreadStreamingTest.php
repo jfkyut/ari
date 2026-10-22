@@ -19,11 +19,12 @@ test('creating a chat stores its first message and streams the first reply in th
         'services.llm.url' => 'https://llm.test/v1/chat/completions',
         'services.llm.key' => 'test-key',
         'services.llm.model' => 'test-model',
+        'services.llm.assistant_name' => 'Mira',
     ]);
 
     Http::fake(function (ClientRequest $request) {
         $content = $request->data()['messages'][0]['content'] === 'Suggest a concise, descriptive title for this chat in 2 to 6 words. Return only the title, with no quotation marks or explanation.'
-            ? ['Legislative Bill Overview']
+            ? ['Project Overview']
             : ['Hello', ' there'];
 
         $events = '';
@@ -43,7 +44,7 @@ test('creating a chat stores its first message and streams the first reply in th
     $this->actingAs($user);
 
     $createResponse = $this->post(route('threads.store'), [
-        'message' => 'Hi Lexi',
+        'message' => 'Hi Mira',
     ]);
     $thread = $user->threads()->firstOrFail();
     $firstMessage = $thread->messages()->firstOrFail();
@@ -63,8 +64,9 @@ test('creating a chat stores its first message and streams the first reply in th
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('chat/Chat')
+            ->where('assistantName', 'Mira')
             ->where('pendingMessageId', $firstMessage->id)
-            ->where('messages.0.content', 'Hi Lexi'));
+            ->where('messages.0.content', 'Hi Mira'));
 
     $streamResponse = $this->post(route('threads.messages.store', $thread), [
         'message_id' => $firstMessage->id,
@@ -75,10 +77,10 @@ test('creating a chat stores its first message and streams the first reply in th
     expect($streamResponse->streamedContent())
         ->toContain('Hello')
         ->toContain(' there')
-        ->toContain('"title":"Legislative Bill Overview"')
+        ->toContain('"title":"Project Overview"')
         ->toContain("event: done\ndata: {}\n\n");
 
-    expect($thread->fresh()->title)->toBe('Legislative Bill Overview');
+    expect($thread->fresh()->title)->toBe('Project Overview');
     $this->assertDatabaseHas('messages', [
         'thread_id' => $thread->id,
         'role' => 'assistant',
@@ -88,11 +90,21 @@ test('creating a chat stores its first message and streams the first reply in th
     Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://llm.test/v1/chat/completions'
         && $request->data()['model'] === 'test-model'
         && $request->data()['stream'] === true
-        && $request->data()['messages'][1] === ['role' => 'user', 'content' => 'Hi Lexi']);
+        && $request->data()['messages'][1] === ['role' => 'user', 'content' => 'Hi Mira']);
     Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://llm.test/v1/chat/completions'
         && $request->data()['stream'] === true
         && $request->data()['messages'][0]['content'] === 'Suggest a concise, descriptive title for this chat in 2 to 6 words. Return only the title, with no quotation marks or explanation.'
-        && $request->data()['messages'][1] === ['role' => 'user', 'content' => 'Hi Lexi']);
+        && $request->data()['messages'][1] === ['role' => 'user', 'content' => 'Hi Mira']);
+    Http::assertSent(function (ClientRequest $request): bool {
+        $systemPrompt = $request->data()['messages'][0]['content'];
+
+        return $request->url() === 'https://llm.test/v1/chat/completions'
+            && str_starts_with(
+                $systemPrompt,
+                'You are Mira, a helpful personal AI assistant. Answer questions across a wide range of topics',
+            )
+            && array_column(array_column($request->data()['tools'], 'function'), 'name') === ['generate_file'];
+    });
 });
 
 test('a title generation failure falls back to the first message without interrupting the response', function () {
@@ -817,9 +829,9 @@ test('AI tool calls create and deliver downloadable PDF DOCX and Excel files', f
             }
         }
 
-        expect($pdfText)->toContain('Republic of the Philippines');
+        expect($pdfText)->toContain('Example Organization');
         expect($pdfText)->toContain('Prepared by:');
-        expect($pdfText)->toContain('Develop and maintain the legislative tracking system');
+        expect($pdfText)->toContain('Develop and maintain the inventory management system');
         expect($pdfText)->toContain('Office details & <verified text>');
         expect($pdfText)
             ->not->toContain('# Republic of the Philippines')
@@ -905,20 +917,20 @@ test('AI tool calls create and deliver downloadable PDF DOCX and Excel files', f
         'format' => 'pdf',
         'filename' => 'report.pdf',
         'title' => 'Generated report',
-        'content' => "# Republic of the Philippines\n".
-            "# Province of Palawan\n".
-            "## OFFICE OF THE SANGGUNIAN BAYAN\n\n".
+        'content' => "# Example Organization\n".
+        "# Operations Department\n".
+        "## OPERATIONS OFFICE\n\n".
             "# ACCOMPLISHMENT REPORT\n".
             "**Period Covered: August 1-31, 2026**\n\n".
             "**Prepared by:**\n".
             "Jake Francis L. Arnosa\n".
             "Information Technology\n\n".
             "**Noted by:**\n".
-            "Gina Abaria-Pacto\n".
-            "Secretary to the Sanggunian\n\n".
+            "Taylor Morgan\n".
+            "Operations Manager\n\n".
             "---\n\n".
-            "## I. SUMMARY OF DUTIES AND FUNCTIONS\n\n".
-            "- Develop and maintain the legislative tracking system\n".
+            "## I. SUMMARY OF RESPONSIBILITIES\n\n".
+            "- Develop and maintain the inventory management system\n".
             "- Regularly update records and information.\n\n".
             'Office details & <verified text>.',
     ], '%PDF-', null, null],
@@ -927,15 +939,15 @@ test('AI tool calls create and deliver downloadable PDF DOCX and Excel files', f
         'filename' => 'report.docx',
         'title' => 'Generated report',
         'content' => "## Duties and Functions\n".
-            "1. Develop the legislative tracking system.\n".
-            "2. Regularly update legislative records.\n\n".
+            "1. Develop the inventory management system.\n".
+            "2. Regularly update inventory records.\n\n".
             "## Accomplishment Report\n".
-            "### 1. Committee Referrals & Management\n".
+            "### 1. Project Delivery & Management\n".
             "- **Alt Views & Layout Adjustments:**\n".
             "  - Refined the alternative view & preserved <markup>.\n".
-            "  - Excluded the main committee column.\n".
+            "  - Excluded the optional details column.\n".
             "- **Filtering & Sorting:**\n".
-            '  - Added filters for committee referrals.',
+            '  - Added filters for project tasks.',
     ], 'PK', 'word/document.xml', 'Refined the alternative view & preserved <markup>.'],
     'Excel' => [[
         'format' => 'xlsx',

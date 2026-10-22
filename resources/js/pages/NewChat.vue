@@ -51,7 +51,7 @@ defineOptions({
                 Start a new chat
             </h1>
             <p class="text-muted-foreground">
-                Ask Lexi a question or attach a photo or document to analyze.
+                Ask anything or attach a photo or document for help analyzing it.
             </p>
         </div>
 

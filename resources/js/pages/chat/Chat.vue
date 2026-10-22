@@ -22,6 +22,7 @@ type ChatMessage = {
 };
 
 const props = defineProps<{
+    assistantName: string;
     thread: {
         id: string;
         title: string;
@@ -330,7 +331,7 @@ onMounted(() => {
                     "
                 >
                     <p class="mb-1 text-xs font-semibold uppercase opacity-70">
-                        {{ item.role === 'user' ? 'You' : 'Lexi' }}
+                        {{ item.role === 'user' ? 'You' : props.assistantName }}
                     </p>
                     <p
                         v-if="item.role === 'user'"

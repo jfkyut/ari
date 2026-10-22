@@ -18,6 +18,7 @@ declare module '@inertiajs/core' {
     export interface InertiaConfig {
         sharedPageProps: {
             name: string;
+            assistantName: string;
             auth: Auth;
             threads: Array<{
                 id: string;

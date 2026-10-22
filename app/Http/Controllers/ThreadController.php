@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Services\AttachmentPromptService;
 use App\Http\Services\GeneratedFileService;
-use App\Http\Services\LegislationContextService;
 use App\Http\Services\LLMService;
 use App\Http\Services\LLMToolCall;
 use App\Models\Attachment;
@@ -38,7 +37,6 @@ class ThreadController extends Controller
 
     public function __construct(
         protected LLMService $llmService,
-        protected LegislationContextService $legislationContextService,
         protected AttachmentPromptService $attachmentPromptService,
         protected GeneratedFileService $generatedFileService,
     ) {}
@@ -292,7 +290,6 @@ class ThreadController extends Controller
                             ->values(),
                     ]);
 
-                    $context = $this->legislationContextService->contextForQuestion((string) ($userMessage->content ?? ''));
                     $toolCallCount = 0;
                     $fileGenerated = false;
 
@@ -301,9 +298,7 @@ class ThreadController extends Controller
 
                         foreach ($this->llmService->stream(
                             $history,
-                            context: $context,
                             allowFileGeneration: ! $fileGenerated,
-                            allowLegislationSearch: true,
                         ) as $streamEvent) {
                             if ($streamEvent instanceof LLMToolCall) {
                                 $toolCalls[] = $streamEvent;
@@ -314,8 +309,6 @@ class ThreadController extends Controller
                             $responseContent .= $streamEvent;
                             yield ['content' => $streamEvent];
                         }
-
-                        $context = null;
 
                         if ($toolCalls === []) {
                             break;
@@ -333,15 +326,7 @@ class ThreadController extends Controller
                             'tool_calls' => [$toolCall->requestData()],
                         ];
 
-                        if ($toolCall->name === 'search_legislation') {
-                            $query = $toolCall->arguments['query'] ?? null;
-
-                            if (! is_string($query) || trim($query) === '' || mb_strlen($query) > 500) {
-                                throw new RuntimeException('The LLM returned an invalid legislation search query.');
-                            }
-
-                            $toolResult = $this->legislationContextService->contextForQuestion(trim($query));
-                        } elseif ($toolCall->name === 'generate_file' && ! $fileGenerated) {
+                        if ($toolCall->name === 'generate_file' && ! $fileGenerated) {
                             $generatedAttachment = $this->generatedFileService->generate($assistantMessage, $toolCall);
                             $generatedPaths[] = $generatedAttachment->path;
                             $fileGenerated = true;

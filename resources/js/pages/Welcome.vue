@@ -42,10 +42,10 @@ import { dashboard, home, login, register } from '@/routes';
             class="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-6 py-20 text-center"
         >
             <div
-                class="mb-8 flex size-16 items-center justify-center rounded-2xl border border-border bg-card shadow-sm"
+                class="mb-8 flex h-22 w-48 items-center justify-center rounded-2xl border border-border bg-zinc-900 p-3 shadow-sm"
                 aria-hidden="true"
             >
-                <AppLogoIcon class="size-9 text-foreground" />
+                <AppLogoIcon class="h-auto w-32 object-contain" />
             </div>
 
             <p
