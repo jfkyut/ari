@@ -55,7 +55,7 @@ class ExcelFileGenerationService
             $sheet->getColumnDimensionByColumn($columnIndex)->setAutoSize(true);
         }
 
-        $temporaryPath = tempnam(sys_get_temp_dir(), 'lexi-xlsx-');
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'ari-xlsx-');
 
         if (! is_string($temporaryPath)) {
             throw new RuntimeException('A temporary Excel file could not be created.');

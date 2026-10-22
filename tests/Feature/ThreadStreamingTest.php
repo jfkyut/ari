@@ -286,7 +286,7 @@ test('a title generation failure falls back to the first message without interru
 
     $user = User::factory()->create();
     $thread = $user->threads()->create(['title' => 'New chat']);
-    $thread->messages()->create(['role' => 'user', 'content' => 'Hi Lexi']);
+    $thread->messages()->create(['role' => 'user', 'content' => 'Hi Ari']);
 
     $response = $this->actingAs($user)->post(route('threads.messages.store', $thread), [
         'message_id' => $thread->messages()->firstOrFail()->id,
@@ -295,10 +295,10 @@ test('a title generation failure falls back to the first message without interru
     $response->assertOk();
     expect($response->streamedContent())
         ->toContain('Hello')
-        ->toContain('"title":"Hi Lexi"')
+        ->toContain('"title":"Hi Ari"')
         ->toContain("event: done\ndata: {}\n\n")
         ->not->toContain('event: error');
-    expect($thread->fresh()->title)->toBe('Hi Lexi');
+    expect($thread->fresh()->title)->toBe('Hi Ari');
     $this->assertDatabaseHas('messages', [
         'thread_id' => $thread->id,
         'role' => 'assistant',
@@ -803,7 +803,7 @@ test('message attachments are stored, included in the AI prompt, and generated f
     }
 
     $pdfContent .= "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF\n";
-    $docxPath = tempnam(sys_get_temp_dir(), 'lexi-docx-');
+    $docxPath = tempnam(sys_get_temp_dir(), 'ari-docx-');
     $docxArchive = new ZipArchive;
     expect($docxArchive->open($docxPath, ZipArchive::OVERWRITE))->toBeTrue();
     $docxArchive->addFromString(
@@ -996,7 +996,7 @@ test('AI tool calls create and deliver downloadable PDF DOCX and Excel files', f
     }
 
     if ($archiveEntry !== null) {
-        $temporaryPath = tempnam(sys_get_temp_dir(), 'lexi-generated-test-');
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'ari-generated-test-');
         try {
             expect(file_put_contents($temporaryPath, $fileContents))->toBeGreaterThan(0);
 
@@ -1033,7 +1033,7 @@ test('AI tool calls create and deliver downloadable PDF DOCX and Excel files', f
                 expect($xpath->query('//w:rPr/w:b')->length)->toBeGreaterThan(0);
                 expect($xpath->query('//w:rPr/w:color[@w:val="1F4E79"]')->length)->toBeGreaterThan(0);
             } else {
-                $spreadsheetPath = tempnam(sys_get_temp_dir(), 'lexi-xlsx-test-');
+                $spreadsheetPath = tempnam(sys_get_temp_dir(), 'ari-xlsx-test-');
 
                 try {
                     expect(file_put_contents($spreadsheetPath, $fileContents))->toBeGreaterThan(0);

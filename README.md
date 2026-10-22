@@ -1,6 +1,6 @@
-# Lexi
+# Ari
 
-Lexi is a general-purpose AI chat application. It supports streamed
+Ari is a general-purpose AI chat application. It supports streamed
 conversations, attachment analysis, and downloadable files.
 
 ## Features

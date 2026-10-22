@@ -6,7 +6,7 @@ import { dashboard, home, login, register } from '@/routes';
 </script>
 
 <template>
-    <Head title="Welcome to Lexi" />
+    <Head title="Welcome to Ari" />
 
     <div class="flex min-h-svh flex-col bg-background text-foreground">
         <header
@@ -61,7 +61,7 @@ import { dashboard, home, login, register } from '@/routes';
             <p
                 class="mt-5 max-w-xl text-base leading-7 text-balance text-muted-foreground sm:text-lg"
             >
-                Ask a question, explore an idea, or work through a draft. Lexi
+                Ask a question, explore an idea, or work through a draft. Ari
                 helps you find clarity, one conversation at a time.
             </p>
 
