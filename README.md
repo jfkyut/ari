@@ -8,7 +8,12 @@ conversations, attachment analysis, and downloadable files.
 - Authenticated conversations with streamed assistant responses.
 - Attachment support for images, PDFs, DOCX, and text files.
 - Downloadable PDF, DOCX, and Excel workbook generation when requested.
+- Inline bar, line, pie, and doughnut charts for numerical data.
 - Conversation and attachment storage in the application database.
+
+Ask Fiona to visualize numerical data to get an inline chart when a chart is
+useful and enough real values are available. Supported chart types are bar,
+line, pie, and doughnut; ordinary code blocks continue to render as code.
 
 ## Requirements
 

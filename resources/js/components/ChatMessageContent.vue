@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import MarkdownInline, { type InlineNode } from '@/components/MarkdownInline.vue';
+import MarkdownInline, {
+    type InlineNode,
+} from '@/components/MarkdownInline.vue';
+import ChatChart from '@/components/ChatChart.vue';
+import { parseChartSpec, type ChartSpec } from '@/types/chart';
 
 type MessageBlock =
     | { type: 'paragraph' | 'quote'; text: string; inline: InlineNode[] }
     | { type: 'heading'; level: number; text: string; inline: InlineNode[] }
     | { type: 'list'; ordered: boolean; items: InlineNode[][] }
     | { type: 'code'; language: string; code: string }
+    | { type: 'chart'; chart: ChartSpec; code: string }
     | { type: 'rule' }
     | { type: 'table'; headers: InlineNode[][]; rows: InlineNode[][][] };
 
@@ -20,14 +25,16 @@ const failedCopyBlock = ref<number | null>(null);
 function safeLinkTarget(href: string): string | null {
     const target = href.trim();
 
-    return !target.includes('\\') && /^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(target)
+    return !target.includes('\\') &&
+        /^(https?:\/\/|mailto:|\/(?!\/)|#)/i.test(target)
         ? target
         : null;
 }
 
 function parseInline(text: string): InlineNode[] {
     const nodes: InlineNode[] = [];
-    const pattern = /(`[^`]+`|\*\*.+?\*\*|__.+?__|~~.+?~~|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\))/g;
+    const pattern =
+        /(`[^`]+`|\*\*.+?\*\*|__.+?__|~~.+?~~|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\))/g;
     let cursor = 0;
 
     for (const match of text.matchAll(pattern)) {
@@ -127,8 +134,16 @@ const blocks = computed<MessageBlock[]>(() => {
             const codeLines: string[] = [];
             let closingFence = -1;
 
-            for (let codeIndex = index + 1; codeIndex < lines.length; codeIndex += 1) {
-                if (new RegExp(`^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`).test(lines[codeIndex])) {
+            for (
+                let codeIndex = index + 1;
+                codeIndex < lines.length;
+                codeIndex += 1
+            ) {
+                if (
+                    new RegExp(
+                        `^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`,
+                    ).test(lines[codeIndex])
+                ) {
                     closingFence = codeIndex;
                     break;
                 }
@@ -136,11 +151,16 @@ const blocks = computed<MessageBlock[]>(() => {
                 codeLines.push(lines[codeIndex]);
             }
 
-            parsed.push({
-                type: 'code',
-                language: fence[2],
-                code: codeLines.join('\n'),
-            });
+            const code = codeLines.join('\n');
+            const chart = ['chart', 'chartjs'].includes(fence[2].toLowerCase())
+                ? parseChartSpec(code)
+                : null;
+
+            parsed.push(
+                chart
+                    ? { type: 'chart', chart, code }
+                    : { type: 'code', language: fence[2], code },
+            );
 
             index = closingFence === -1 ? lines.length : closingFence;
             continue;
@@ -153,14 +173,21 @@ const blocks = computed<MessageBlock[]>(() => {
 
         const nextLine = lines[index + 1] ?? '';
 
-        if (line.includes('|') && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(nextLine)) {
+        if (
+            line.includes('|') &&
+            /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(nextLine)
+        ) {
             flushText();
             const headers = tableCells(line).map(parseInline);
             const rows: InlineNode[][][] = [];
 
             index += 2;
 
-            while (index < lines.length && lines[index].includes('|') && lines[index].trim() !== '') {
+            while (
+                index < lines.length &&
+                lines[index].includes('|') &&
+                lines[index].trim() !== ''
+            ) {
                 rows.push(tableCells(lines[index]).map(parseInline));
                 index += 1;
             }
@@ -251,7 +278,10 @@ async function copyCode(code: string, blockIndex: number): Promise<void> {
 <template>
     <div class="flex min-w-0 flex-col gap-4 break-words">
         <template v-for="(block, index) in blocks" :key="index">
-            <p v-if="block.type === 'paragraph'" class="whitespace-pre-wrap leading-7">
+            <p
+                v-if="block.type === 'paragraph'"
+                class="leading-7 whitespace-pre-wrap"
+            >
                 <MarkdownInline :nodes="block.inline" />
             </p>
 
@@ -308,7 +338,11 @@ async function copyCode(code: string, blockIndex: number): Promise<void> {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="(row, rowIndex) in block.rows" :key="rowIndex" class="even:bg-muted/30">
+                        <tr
+                            v-for="(row, rowIndex) in block.rows"
+                            :key="rowIndex"
+                            class="even:bg-muted/30"
+                        >
                             <td
                                 v-for="(cell, cellIndex) in row"
                                 :key="cellIndex"
@@ -322,31 +356,46 @@ async function copyCode(code: string, blockIndex: number): Promise<void> {
             </div>
 
             <div
+                v-else-if="block.type === 'chart'"
+                class="overflow-hidden rounded-lg border border-border bg-muted/40 p-3"
+            >
+                <ChatChart :chart="block.chart" />
+            </div>
+
+            <div
                 v-else-if="block.type === 'code'"
                 class="overflow-hidden rounded-lg border border-border bg-muted/40"
             >
-                <div class="flex items-center justify-between border-b border-border bg-muted/70 px-4 py-2">
-                    <span class="text-xs text-muted-foreground">{{ block.language || 'Code' }}</span>
+                <div
+                    class="flex items-center justify-between border-b border-border bg-muted/70 px-4 py-2"
+                >
+                    <span class="text-xs text-muted-foreground">{{
+                        block.language || 'Code'
+                    }}</span>
                     <button
                         type="button"
                         class="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                        :aria-label="copiedBlock === index
-                            ? 'Code copied'
-                            : failedCopyBlock === index
-                                ? 'Could not copy code'
-                                : 'Copy code'"
+                        :aria-label="
+                            copiedBlock === index
+                                ? 'Code copied'
+                                : failedCopyBlock === index
+                                  ? 'Could not copy code'
+                                  : 'Copy code'
+                        "
                         @click="copyCode(block.code, index)"
                     >
                         {{
                             copiedBlock === index
                                 ? 'Copied'
                                 : failedCopyBlock === index
-                                    ? 'Copy failed'
-                                    : 'Copy code'
+                                  ? 'Copy failed'
+                                  : 'Copy code'
                         }}
                     </button>
                 </div>
-                <pre class="overflow-x-auto p-4 text-sm leading-6"><code class="font-mono">{{ block.code }}</code></pre>
+                <pre
+                    class="overflow-x-auto p-4 text-sm leading-6"
+                ><code class="font-mono">{{ block.code }}</code></pre>
             </div>
         </template>
     </div>
