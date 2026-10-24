@@ -108,7 +108,7 @@ class DocxFileGenerationService
                 $this->addFormattedParagraph($section, $trimmedLine);
             }
 
-            $temporaryPath = tempnam(sys_get_temp_dir(), 'ari-docx-');
+            $temporaryPath = tempnam(sys_get_temp_dir(), 'fiona-docx-');
 
             if (! is_string($temporaryPath)) {
                 throw new RuntimeException('A temporary DOCX file could not be created.');

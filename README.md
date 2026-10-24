@@ -1,6 +1,6 @@
-# Ari
+# Fiona
 
-Ari is a general-purpose AI chat application. It supports streamed
+Fiona is a general-purpose AI chat application. It supports streamed
 conversations, attachment analysis, and downloadable files.
 
 ## Features
@@ -49,16 +49,16 @@ to use another Laravel-supported database.
 
 Set these values in `.env`:
 
-| Variable | Purpose |
-| --- | --- |
-| `APP_NAME` | Application name shown by Laravel. |
-| `APP_URL` | Base URL for the application. |
-| `ASSISTANT_NAME` | Personal AI name shown in chat and used in its instructions; defaults to `Ari`. |
-| `LLM_URL` | Full chat-completions endpoint URL, such as `https://api.example.com/v1/chat/completions`. |
-| `LLM_API_KEY` | API key for the configured LLM provider. |
-| `LLM_MODEL` | Model name supported by that provider. |
-| `TAVILY_API_KEY` | API key for optional web search and webpage extraction, with citations in Ari's answers. |
-| `DB_CONNECTION` | Application database driver; defaults to `sqlite`. |
+| Variable         | Purpose                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `APP_NAME`       | Application name shown by Laravel.                                                         |
+| `APP_URL`        | Base URL for the application.                                                              |
+| `ASSISTANT_NAME` | Personal AI name shown in chat and used in its instructions; defaults to `Fiona`.          |
+| `LLM_URL`        | Full chat-completions endpoint URL, such as `https://api.example.com/v1/chat/completions`. |
+| `LLM_API_KEY`    | API key for the configured LLM provider.                                                   |
+| `LLM_MODEL`      | Model name supported by that provider.                                                     |
+| `TAVILY_API_KEY` | API key for optional web search and webpage extraction, with citations in Fiona's answers. |
+| `DB_CONNECTION`  | Application database driver; defaults to `sqlite`.                                         |
 
 Do not commit `.env` or put API keys and database credentials in source
 control.

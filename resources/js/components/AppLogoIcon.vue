@@ -14,7 +14,7 @@ defineProps<Props>();
 
 <template>
     <img
-        src="/ari-logo.png"
+        src="/fiona-logo.svg"
         alt=""
         :class="className"
         v-bind="$attrs"

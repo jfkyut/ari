@@ -28,7 +28,7 @@ class LLMService
             throw new RuntimeException('The LLM service is not configured.');
         }
 
-        $assistantName = config('services.llm.assistant_name', 'Ari');
+        $assistantName = config('services.llm.assistant_name', 'Fiona');
         $systemContent = $systemPrompt ?? "You are {$assistantName}, a helpful personal AI assistant. Answer questions across a wide range of topics with accurate, clear, and useful responses. Be honest about uncertainty and limitations.";
 
         if ($systemPrompt === null) {

@@ -36,7 +36,7 @@ return [
     ],
 
     'llm' => [
-        'assistant_name' => env('ASSISTANT_NAME', 'Ari'),
+        'assistant_name' => env('ASSISTANT_NAME', 'Fiona'),
         'url' => env('LLM_URL'),
         'key' => env('LLM_API_KEY'),
         'model' => env('LLM_MODEL'),

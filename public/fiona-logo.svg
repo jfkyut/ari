@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 90" fill="none">
+  <g fill="#fff">
+    <path d="M39 13a31 31 0 1 0 19 55l15 11V58a31 31 0 0 0-34-45Zm0 12a19 19 0 1 1-11 35l-3 2v-7a19 19 0 0 1 14-30Z"/>
+    <circle cx="33" cy="43" r="3.5"/>
+    <circle cx="45" cy="43" r="3.5"/>
+    <circle cx="57" cy="43" r="3.5"/>
+  </g>
+  <text x="88" y="62" fill="#fff" font-family="Arial, sans-serif" font-size="48" font-weight="600">Fiona</text>
+</svg>
